@@ -25,114 +25,116 @@
 <script>
 
     const draw = new SVG('container').size(window.innerWidth, window.innerHeight);
-    // const drawText = new SVG('textSVG').size(window.innerWidth, window.innerHeight);
-    // const drawCircle = new SVG('circleSVG').size(window.innerWidth, window.innerHeight);
+    const COLORS = {red: "red"};
 
     let data;
     let dat;
-    function getData(path) {
-        return new Promise(function (resolve, reject) {
-            fetch(path)
-                .then(
-                    function (response) {
-                        if (response.status !== 200) {
-                            console.log('Looks like there was a problem. Status Code: ' +
-                                response.status);
-                            return;
-                        }
-                        // Examine the text in the response
-                        response.json().then(function (data) {
-                            console.log(data, "data");
-                            resolve(data)
-                        });
-                    }
-                )
-                .catch(function (err) {
-                    reject();
-                    console.log('Fetch Error :-S', err);
-                });
-        })
-    }
+    let raw
 
-    let objs;
+
     let circles;
     let textViews;
+    let textBackgrounds;
+
+    function spaceOut(d){
+        if (d.distance !== 0) {
+            d.distance *=3000;
+            d.distance += 60
+        }
+    }
 
     //TODO: drop shadows
     //      history timelines
     //      venn diagramming / only show tag overlaps
 
     getData('./data.json').then(rawData => {
-        data = JSON.parse(JSON.stringify(rawData.slice(0, 200)))
+        raw = JSON.parse(JSON.stringify(rawData.slice(0, 1000)))
+        raw = cleanData(raw);
 
-        function cleanData(data) {
-            dat = JSON.parse(JSON.stringify(data)) //don't do this if data is more than 2 layers deep!
-            dat.map(d => d.vector = d.vector.split(' '));
-            dat.map(d => {
-                d.vector[0] = d.vector[0].slice(1);
-                d.vector[d.vector.length - 1] = d.vector[d.vector.length - 1].slice(0, -1)
-            })
-            //data ==> entry.vector ==> entry
-            dat.map(d => d.vector = d.vector.filter(s => s !== ""))
-            dat.map(d => d.vector = d.vector.map((parseFloat)))
-            return dat;
-        }
+        raw = raw.slice(0, 1000);
+         //100 = vector lengthß
+        let focus = raw[5];
+        const centerPos = [window.innerWidth / 2, window.innerHeight / 2];
 
-        data = cleanData(data);
+        updatePositionData(focus, raw);
 
-        next();
+        data = raw.sort((a,b) => a.distance - b.distance)
+            .slice(0, 30)
+        //a.distance > b.distance didn't work
 
-        //clean data
-        function updateData(focus, data){
+        circles = data.map((d) => draw.circle(30).attr(posForCircle(centerPos, d.distance, d.unitPos)));
+        textViews = data.map((d) => draw.text(d.word).attr(posForText(centerPos, d.distance, d.unitPos)));
+        textViews.map(e=> e.attr({fill: "red"}))
+        textBackgrounds = data.map((d) => draw.rect(d.word.length * 5, 10).attr({fill: "blue"}).attr(posForText(centerPos, d.distance, d.unitPos)));
+
+        circles.map((e, i) => e.data = data[i]);
+        textViews.map((t, i) => t.data = data[i]);
+
+
+        //events
+        circles.map(c => c.click(function () {
+            focus = c.data;
+            focus.distance = 0;
+            updateAll(focus, data)
+        }))
+
+
+        //center Circle / Concept
+        draw.circle(60).attr(posForCircle(centerPos)).attr({fill: "#f03"})
+
+
+        function updatePositionData(focus, data){
             setRelativeCenter(focus)(data)
                 .map(d=>spaceOut(d));
 
             data.map((d, i, arr) => d.unitPos = percToUnitCirlce(i / arr.length - 1));
         }
-        function next() {
-            data = data.slice(0, 20)
-            let focus = data[5];
-            const centerPos = [window.innerWidth / 2, window.innerHeight / 2];
 
-            updateData(focus, data);
-
-
-
-            function updateGraph() {
-                textViews.map(t => t.hide());
-                circles.map(c => {
-                    c.animate(1300).move(centerPos[0] - 15, centerPos[1] - 15)
-                    updateData(focus, data);
-                    circles.map((c, i) => c.data = data[i]);
-                    textViews.map((t, i) => t.data = data[i]);
-                })
-                window.setTimeout(function () {
-                    expandNodes();
-
-                }, 1500)
-            }
-
-
-
-
-            circles = data.map((d) => draw.circle(30).attr(posForCircle(centerPos, d.distance, d.unitPos)));
-            textViews = data.map((d) => draw.text(d.word).attr(posForText(centerPos, d.distance, d.unitPos)));
-
-            circles.map((e, i) => e.data = data[i]);
-
-            circles.map(c => c.click(function () {
-                focus = c.data;
-                focus.distance = 0;
-                updateGraph()
-            }))
-
-            circles.map(c => c.add)
-            draw.circle(60).attr(posForCircle(centerPos)).attr({fill: "#f03"})
-
+        function updateAll(focus, dat) {
+            updatePositionData(focus, dat);
+            updateNodeData();
+            wait(collapseNodes, 700)
+                .then(d => wait(expandNodes, 500))
         }
 
+        function collapseNodes(duration) {
+            textViews.map(t => t.hide());
+            circles.map(c => c.animate(duration).move(centerPos[0] - 15, centerPos[1] - 15))
+        }
+        function expandNodes(duration) {
+            circles.map(function (c) {
+                c.animate(duration).attr(posForCircle(centerPos, c.data.distance, c.data.unitPos))
+                    .afterAll(function () {
+                        textViews.map(t => t.attr(posForText(centerPos, t.data.distance, t.data.unitPos)))
+                        textViews.map(t => t.show());
+                    })
+            })
+        }
     })
 
+
+
+
+
+    function updateNodeData() {
+        circles.map((c, i) => c.data = data[i]);
+        textViews.map((t, i) => t.data = data[i]);
+    }
+    function wait(fn, timeout = 1500) {
+        return new Promise(function(resolve, reject){
+            try {
+                fn(timeout);
+                window.setTimeout(function () {
+                    resolve()
+                }, timeout + 100)
+            }
+            catch(error){
+                console.error("Set timeout didn't work, error ==>", error)
+                reject();
+            }
+
+        })
+    }
 
     function backToCenter(circles, center) {
         circles.map(c => c.animate().move({cx: 400, cy: 400}))
@@ -163,6 +165,19 @@
         }
     }
 
+    function cleanData(data) {
+        dat = JSON.parse(JSON.stringify(data)) //don't do this if data is more than 2 layers deep!
+        dat.map(d => d.vector = d.vector.split(' '));
+        dat.map(d => {
+            d.vector[0] = d.vector[0].slice(1);
+            d.vector[d.vector.length - 1] = d.vector[d.vector.length - 1].slice(0, -1)
+        })
+        //data ==> entry.vector ==> entry
+        dat.map(d => d.vector = d.vector.filter(s => s !== ""))
+        dat.map(d => d.vector = d.vector.map((parseFloat)))
+        return dat;
+    }
+
     function percToUnitCirlce(percentage) {
         let rad = Math.PI * 2 * percentage
         let x = Math.cos(rad); //x of einheitskreis
@@ -170,25 +185,11 @@
         return [x, y]
     }
 
-    function spaceOut(d){
-        if (d.distance !== 0) {
-            d.distance *=70;
-            d.distance += 60
-        }
-    }
 
-    function expandNodes() {
-        circles.map(function (c) {
-            c.animate(500).attr(posForCircle(centerPos, c.data.distance, c.data.unitPos))
-                .afterAll(function () {
-                    textViews.map(t => t.attr(posForText(centerPos, t.data.distance, t.data.unitPos)))
-                    textViews.map(t => t.show());
-                })
-        })
-    }
+
+
 
     function posForText(center, distance, rnd) {
-
         return {
             x: center[0] + rnd[0] * distance - 35,
             y: center[1] + rnd[1] * distance - 40
@@ -208,6 +209,30 @@
     //make into multi-use Applicatives!!!
     function vectorSubtract(V1, V2) {
         return V1.map((e, i) => e - V2[i]);
+    }
+
+    function getData(path) {
+        return new Promise(function (resolve, reject) {
+            fetch(path)
+                .then(
+                    function (response) {
+                        if (response.status !== 200) {
+                            console.log('Looks like there was a problem. Status Code: ' +
+                                response.status);
+                            return;
+                        }
+                        // Examine the text in the response
+                        response.json().then(function (data) {
+                            console.log(data, "data");
+                            resolve(data)
+                        });
+                    }
+                )
+                .catch(function (err) {
+                    reject();
+                    console.log('Fetch Error :-S', err);
+                });
+        })
     }
 
 
