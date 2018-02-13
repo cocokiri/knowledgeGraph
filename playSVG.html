@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Document</title>
+</head>
+<div id="container">
+    <div id="textSVG"></div>
+    <div id="circleSVG"></div>
+</div>
+
+<body>
+
+<script src='http://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js'></script>
+<script src='https://s3-us-west-2.amazonaws.com/s.cdpn.io/14082/FileSaver.js'></script>
+<script src="./svg.js"></script>
+<script src="./svg.pathmorphing.js"></script>
+<script src="text.js"></script>
+<script>
+
+    const draw = new SVG('container').size(window.innerWidth, window.innerHeight);
+    // const drawText = new SVG('textSVG').size(window.innerWidth, window.innerHeight);
+    // const drawCircle = new SVG('circleSVG').size(window.innerWidth, window.innerHeight);
+
+    const WORDS = [
+        "javascript",
+        "haskell",
+        "jay leno",
+        "antifragile",
+        "blockchain",
+        "jesus",
+        "christ",
+        "james brown",
+        "murder",
+        "category",
+        "theory",
+        "unison",
+        "hoax",
+        "scam",
+        "destroy",
+        "web"
+    ]
+
+    const randomVector = function (dimensions = 3) {
+        const vec = new Array(dimensions).fill(1);
+        const vRandom = vec.map(e => Math.random())
+        return vRandom;
+    };
+
+    const randomData = new Array(WORDS.length)
+        .fill(1)
+        .map(function (e, i) {
+            return {
+                name: WORDS[i],
+                vector: randomVector().map(e => e * 100)
+            }
+        })
+
+    console.log(randomData)
+
+    function randomEntry(arr) {
+        return arr[Math.floor(Math.random() * (arr.length + 1))]
+    }
+
+    let currentFocus = randomEntry(randomData);
+
+
+    const focusPos = [window.innerWidth / 2, window.innerHeight / 2];
+
+
+    function setFocus(el, arr) {
+        const findDistToFocus = mapAroundFocus(el);
+        const entriesWithDist = findDistToFocus(arr);
+        entriesWithDist.map(e => {
+            if (e.distance !== 0) {
+                e.distance += 30
+            }
+        })
+        entriesWithDist.map((d,i,arr) => d.unitPos = percToUnitCirlce(i/arr.length-1));
+        return entriesWithDist;
+    }
+
+    let data = setFocus(randomData[5], randomData)
+
+
+    //onclick
+    //blend out text
+    //animate back to center
+    //clear canv()
+    //recalculate data
+    //draw circles in center
+    //expand animate to new pos
+    //blend in text
+
+    function updateGraph() {
+        textViews.map(t => t.hide());
+        circles.map(c => c.animate(1300).move(focusPos[0] - 15, focusPos[1] - 15)
+            .afterAll(function () {
+                data = setFocus(currentFocus, data);
+                circles.map((c, i) => c.data = data[i]);
+                textViews.map((t, i) => t.data = data[i]);
+            }))
+
+        window.setTimeout(function () {
+            circles.map(function (c, i) {
+                c.animate(500).attr(posForCircle(focusPos, c.data.distance, c.data.unitPos))
+                    .afterAll(function () {
+                        textViews.map(t => t.attr(posForText(focusPos, t.data.distance, t.data.unitPos)))
+                        textViews.map(t => t.show());
+                    })
+            })
+        }, 1500)
+    }
+
+
+    const circles = data.map((d,i) => draw.circle(30).attr(posForCircle(focusPos, d.distance, d.unitPos)));
+    const textViews = data.map((d,i) => draw.text(d.name).attr(posForText(focusPos, d.distance, d.unitPos)));
+
+
+    // const textSet = draw.set();
+    // data.map((d,i)=>textSet.add(textViews[i]))
+
+    // const f =posForSVG(focusPos, d.distance)
+
+    circles.map((e, i) => e.data = data[i]);
+
+    circles.map(c => c.click(function () {
+        currentFocus = c.data;
+        currentFocus.distance = 0;
+        updateGraph()
+    }))
+
+
+    circles.map((c) => {
+        // c.animate().move(focusPos[0] -15, focusPos[1] -15).after(function(){
+        // this.animate().attr({cx: 400, cy:400});
+        // })
+    })
+
+
+    function backToCenter(circles, center) {
+        circles.map(c => c.animate().move({cx: 400, cy: 400}))
+    }
+
+    circles.map(c => c.add)
+    draw.circle(60).attr(posForCircle(focusPos)).attr({fill: "#f03"})
+
+
+    //UTILS
+    function vecDiff(v1, v2) {
+        return Math.sqrt(
+            vectorSubtract(v1, v2)
+                .map(e => Math.pow(e, 2))
+                .reduce((acc, val) => acc + val, 0)
+        )
+    }
+
+    function distanceSq(V1, V2) {
+        if (V1.length !== V2.length) {
+            console.error("vectors not same size!")
+            return
+        }
+        const deltas = V1.map((e, i) => e - V2[i]);
+        const deltaSq = deltas.map(e => Math.pow(e, 2));
+        const distance = deltaSq.reduce((acc, val) => acc + val, 0);
+        return distance;
+    }
+
+
+    function randomOnUnitCirlce() {
+        let rad = Math.random() * Math.PI * 2;
+        let x = Math.cos(rad); //x of einheitskreis
+        let y = Math.sin(rad); //y of einheitsKreis
+        return [x, y]
+    }
+
+    function mapAroundFocus(focusEntry) {
+        return function mapCloseWords(allEntries) {
+            const clone = JSON.parse(JSON.stringify(allEntries))
+
+            clone.map(e => {
+                e.distance = vecDiff(e.vector, focusEntry.vector)
+            });
+            return clone;
+        }
+    }
+
+
+    function percToUnitCirlce(percentage){
+        let rad = Math.PI * 2 * percentage
+        let x = Math.cos(rad); //x of einheitskreis
+        let y = Math.sin(rad); //y of einheitsKreis
+        return [x, y]
+    }
+
+    function posForText(center, distance, rnd) {
+
+        return {
+            x: center[0] + rnd[0] * distance - 35,
+            y: center[1] + rnd[1] * distance - 40
+        }
+    }
+
+    function posForCircle(center, distance = 0, rnd) {
+        if (distance ==0) {rnd = [0,0]}
+        return {
+            cx: center[0] + rnd[0] * distance,
+            cy: center[1] + rnd[1] * distance
+        }
+    }
+
+    const stateText = function (state) {
+        let text = draw.text(function (add) {
+            for (prop in state) {
+                if (typeof state[prop] !== undefined) { //if not a function..not working
+                    add.tspan(prop + " : " + state[prop]).newLine();
+                }
+            }
+        })
+        return text
+    }
+
+    // [2,3,4].map(el => firstAnimation(el))
+
+    function firstAnimation(el) {
+        el.animate(1000, '>', 100).attr({fill: "#f03"}).after(function () {
+            return secondAnimation(el)
+        })
+    }
+
+    function secondAnimation(el) {
+        el.animate(1000, '>', 100).attr({fill: "#000"}).after(function () {
+            return firstAnimation(el)
+        })
+    }
+
+    //make into multi-use Applicatives!!!
+    function vectorSubtract(V1, V2) {
+        return V1.map((e, i) => e - V2[i]);
+    }
+
+    function square(vec) {
+        return vec.map(e => Math.pow(e, 2))
+    }
+
+    function sum(arr) {
+        return arr.reduce((acc, val) => acc + val, 0)
+    }
+
+
+</script>
+</body>
+</html>
+
