@@ -76,6 +76,23 @@
 <script src="./svg.pathmorphing.js"></script>
 <script>
     const draw = new SVG('container').size(window.innerWidth, window.innerHeight);
+    const SEARCH = document.getElementById('searchInput')
+    SEARCH.addEventListener('keypress', function (e) {
+        key = e.which || e.keyCode;
+        if (key === 13) { // 13 is enter\n'
+            //update();
+            function searchInput() {
+                previousTags = [];
+                focus = c.data;
+                focus.distance = 0;
+                updateAll(focus, data)
+            }
+
+
+        }
+    })
+
+    let previousWords = [];
 
 
     const gradYellowOrange = draw.gradient('linear', function (stop) {
@@ -95,13 +112,28 @@
     let data;
     let dat;
     let raw;
-    const centerPos = [window.innerWidth / 2, window.innerHeight / 2];
+    let centerPos = [window.innerWidth / 2, window.innerHeight / 2];
+    let CENTER = screenCenter(window);
+    CENTER.diff = function(otherPos) {
+        return {x: CENTER.x - otherPos.x, y: CENTER.y - otherPos.y}
+    };
 
+    window.addEventListener('resize', function() {
+    })
+
+
+
+    function screenCenter(w = window) {
+        return {x: w.innerWidth/2, y: w.innerHeight/2}
+    }
 
     let circles;
     let textViews;
     let textBackgrounds;
     let focusNode;
+    const MAX_NEIGHBORS = 30;
+    let focus;
+
 
     let previousTags = [];
 
@@ -127,34 +159,29 @@
 
         raw = raw.slice(0, 1000);
         //100 = vector lengthß
-        let focus = raw[5];
+        focus = raw[5];
 
-        const MAX_NEIGHBORS = 30;
         //assignWordDistance
-        setFocus(focus, raw)
-        //go from W2Vec distance to screenDistance
-            .map(spaceOut)
-            //place arbitrarily on circle
-            .map((d, i, arr) => d.unitPos = percToUnitCirlce(i / arr.length - 1));
 
-        data = raw
-            .sort((a, b) => a.distance - b.distance)
-            .slice(0, MAX_NEIGHBORS);
+        updateData(focus, raw);
 
-        // data.map(d => d.pos = {x: d.unitPos})
 
-        circles = data.map((d) => draw.circle(40).attr(posForCircle(centerPos, d.distance, d.unitPos)));
-        textBackgrounds = data.map((d) => draw.rect(Math.sqrt(d.word.length) * 25, 20).attr({fill: "blue"}).attr(posForText(centerPos, d.distance, d.unitPos)));
+        circles = data.map(d => draw.circle(40)
+            .attr(x_cx(CENTER.diff(d.pos)))
+            .addClass('circles'));
+
+        textBackgrounds = data
+            .map(d => draw.rect(Math.sqrt(d.word.length) * 25, 20)
+            .attr(CENTER.diff(d.pos)));
 
         textViews = data.map((d) => draw.text(d.word));
-
-
         textViews.map(e => {
-            e.font({
-                family: 'Helvetica'
-                , size: 12
-                // , leading:  '0em'
-            });
+            e.font(
+                {
+                    family: 'Helvetica',
+                    size: 12,
+                    fontWeight: "bold"
+                });
             e.attr({fill: "white"})
         });
 
@@ -170,34 +197,43 @@
 
             focus = c.data;
             focus.distance = 0;
-            updateAll(focus, data)
+            updateData(focus, raw);
+            updateNodeData();
+            textViews.map(t => t.text(t.data.word)) //new subset of RAW data --> new words
+            wait(collapseNodes, 700)
+                .then(d => wait(expandNodes, 500))
+
         }))
 
-        let search = document.getElementById('searchInput')
-        search.addEventListener('keypress', function (e) {
-            key = e.which || e.keyCode;
-            if (key === 13) { // 13 is enter\n'
-                //update();
-                previousTags = [];
 
-                focus = c.data;
-                focus.distance = 0;
-                updateAll(focus, data)
-
-            }
-        })
 
         //center Circle / Concept
         setTextWithBG(data);
     })
 
+
+    function updateData(focus,raw) {
+        setFocus(focus, raw)
+        //go from W2Vec distance to screenDistance
+            .map(spaceOut)
+
+        data = raw
+            .sort((a, b) => a.distance - b.distance)
+            .slice(0, MAX_NEIGHBORS);
+
+        console.log(data, "newdata")
+
+        data.map((d, i, arr) => {d.unitPos = UnitCirlce(i / (arr.length - 1)); return d})   //place on a UnitCircle (arbitrarily)
+            .map(d => d.pos= {x: d.unitPos.x * d.distance, y: d.unitPos.y * d.distance})    //scale place on UC by distance to center
+    }
+
     function setTextWithBG(data) {
         data.map((d, i) => {
-            const pos = posForText(centerPos, d.distance, d.unitPos);
+            const pos = CENTER.diff(d.pos);
             textBackgrounds[i].attr(pos);
             textBackgrounds[i].fill(gradBlueDark);
             textBackgrounds[i].addClass('textBG')
-            pos.x += 10;
+            pos.x += 20;
             textViews[i].attr(pos);
         });
     }
@@ -211,47 +247,25 @@
         return data;
     }
 
-    //setFocus.map(spaceout)
-
-    function setFocusPoint(focus, data) {
-        setRelativeCenter(focus)(data)
-            .map(d => spaceOut(d));
-
-        data.map((d, i, arr) => d.unitPos = percToUnitCirlce(i / arr.length - 1));
+    function x_cx(pos) {
+        const {x, y} = pos;
+        return {cx: x, cy: y}
     }
-    function setRelativeCenter(focusEntry) {
-        //mutates input
-        return function (allEntries) {
-            allEntries.map(e => {
-                e.distance = vecDiff(e.vector, focusEntry.vector)
-            });
-            return allEntries;
-        }
-    }
-
-
-
-    function updateAll(focus, dat) {
-        setFocusPoint(focus, dat);
-        updateNodeData();
-        wait(collapseNodes, 700)
-            .then(d => wait(expandNodes, 500))
-    }
+    
 
     function collapseNodes(duration) {
         textViews.map(t => t.hide());
         textBackgrounds.map(tb => tb.hide())
-        circles.map(c => c.animate(duration).move(centerPos[0] - 15, centerPos[1] - 15))
+        circles.map(c => c.animate(duration).move(CENTER.x, CENTER.y - 15))
     }
 
     function expandNodes(duration) {
         return new Promise(function (resolve, reject) {
             circles.map(function (c) {
-
-                c.animate(duration).attr(posForCircle(centerPos, c.data.distance, c.data.unitPos))
+                c.animate(duration).attr(x_cx(CENTER.diff(c.data.pos)))
                     .afterAll(function () {
                         textViews.map((t, i) => {
-                            const pos = posForText(centerPos, t.data.distance, t.data.unitPos);
+                            const pos = CENTER.diff(t.data.pos);
                             t.attr(pos)
                             textBackgrounds[i].attr(pos);
                         })
@@ -274,9 +288,9 @@
                 }
                 else {
                     c.animate(350).radius(15 + Math.random() * 5)
-                    if (previousTags.includes(c)) {
-                        c.animate(300).fill("#c989ea");
-                    }
+                    // if (previousTags.includes(c) && data.map(e=> e.word).includes(c.data.word)) {
+                    //     c.animate(300).fill("#c989ea");
+                    // }
 
                 }
             }
