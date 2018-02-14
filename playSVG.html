@@ -24,21 +24,43 @@
 <script src="text.js"></script>
 <script>
 
+    // //Diagonal gradient
+    // linearGradient
+    //     .attr("x1", "0%")
+    //     .attr("y1", "0%")
+    //     .attr("x2", "100%")
+    //     .attr("y2", "100%");
+
     const draw = new SVG('container').size(window.innerWidth, window.innerHeight);
+
+    const gradYellowOrange = draw.gradient('linear', function(stop) {
+        stop.at(0, '#f4ff14', 0.8)
+        stop.at(1, '#ff6033', 0.9)
+    })
+    const gradBlueDark = draw.gradient('linear', function(stop) {
+        stop.at(0, '#4fafff', 0.9)
+        stop.at(1, '#797cff', 0.9)
+    })
+
+    const gradPinkPurple = draw.gradient('linear', function(stop) {
+        stop.at(0, '#fbaaff', 0.7)
+        stop.at(1, '#4f4fff', 0.9)
+    })
     const COLORS = {red: "red"};
 
     let data;
     let dat;
-    let raw
+    let raw;
+    const centerPos = [window.innerWidth / 2, window.innerHeight / 2];
 
 
     let circles;
     let textViews;
     let textBackgrounds;
 
-    function spaceOut(d){
+    function spaceOut(d) {
         if (d.distance !== 0) {
-            d.distance *=3000;
+            d.distance *= 3000;
             d.distance += 60
         }
     }
@@ -49,86 +71,107 @@
 
     getData('./data.json').then(rawData => {
         raw = JSON.parse(JSON.stringify(rawData.slice(0, 1000)))
-        raw = cleanData(raw);
+        raw = parseVectorStrings(raw);
 
         raw = raw.slice(0, 1000);
-         //100 = vector lengthß
+        //100 = vector lengthß
         let focus = raw[5];
-        const centerPos = [window.innerWidth / 2, window.innerHeight / 2];
 
         updatePositionData(focus, raw);
 
-        data = raw.sort((a,b) => a.distance - b.distance)
-            .slice(0, 30)
+        data = raw.sort((a, b) => a.distance - b.distance)
+            .slice(0, 30);
         //a.distance > b.distance didn't work
+        circles = data.map((d) => draw.circle(40).attr(posForCircle(centerPos, d.distance, d.unitPos)));
+        textBackgrounds = data.map((d) => draw.rect(d.word.length * 10, 20).attr({fill: "blue"}).attr(posForText(centerPos, d.distance, d.unitPos)));
 
-        circles = data.map((d) => draw.circle(30).attr(posForCircle(centerPos, d.distance, d.unitPos)));
-        textViews = data.map((d) => draw.text(d.word).attr(posForText(centerPos, d.distance, d.unitPos)));
-        textViews.map(e=> e.attr({fill: "red"}))
-        textBackgrounds = data.map((d) => draw.rect(d.word.length * 5, 10).attr({fill: "blue"}).attr(posForText(centerPos, d.distance, d.unitPos)));
+        textViews = data.map((d) => draw.text(d.word));
 
-        circles.map((e, i) => e.data = data[i]);
+
+        textViews.map(e => {
+            e.font({
+                family:   'Helvetica'
+                , size:     12
+                // , leading:  '0em'
+            })
+            e.attr({fill: "white"})
+        })
+
+
+
+        circles.map((e, i) => {
+            e.fill(gradYellowOrange)
+            e.data = data[i]
+        });
         textViews.map((t, i) => t.data = data[i]);
-
-
         //events
         circles.map(c => c.click(function () {
             focus = c.data;
             focus.distance = 0;
             updateAll(focus, data)
         }))
-
-
         //center Circle / Concept
-        draw.circle(60).attr(posForCircle(centerPos)).attr({fill: "#f03"})
-
-
-        function updatePositionData(focus, data){
-            setRelativeCenter(focus)(data)
-                .map(d=>spaceOut(d));
-
-            data.map((d, i, arr) => d.unitPos = percToUnitCirlce(i / arr.length - 1));
-        }
-
-        function updateAll(focus, dat) {
-            updatePositionData(focus, dat);
-            updateNodeData();
-            wait(collapseNodes, 700)
-                .then(d => wait(expandNodes, 500))
-        }
-
-        function collapseNodes(duration) {
-            textViews.map(t => t.hide());
-            circles.map(c => c.animate(duration).move(centerPos[0] - 15, centerPos[1] - 15))
-        }
-        function expandNodes(duration) {
-            circles.map(function (c) {
-                c.animate(duration).attr(posForCircle(centerPos, c.data.distance, c.data.unitPos))
-                    .afterAll(function () {
-                        textViews.map(t => t.attr(posForText(centerPos, t.data.distance, t.data.unitPos)))
-                        textViews.map(t => t.show());
-                    })
-            })
-        }
+        setTextWithBG(data);
     })
 
+    function setTextWithBG(data) {
+        data.map((d,i) => {
+            const pos = posForText(centerPos, d.distance, d.unitPos);
+            textBackgrounds[i].attr(pos);
+            textBackgrounds[i].fill(gradBlueDark)
+            pos.x +=10;
+            textViews[i].attr(pos);
+        });
+    }
 
+    function updatePositionData(focus, data) {
+        setRelativeCenter(focus)(data)
+            .map(d => spaceOut(d));
 
+        data.map((d, i, arr) => d.unitPos = percToUnitCirlce(i / arr.length - 1));
+    }
 
+    function updateAll(focus, dat) {
+        updatePositionData(focus, dat);
+        updateNodeData();
+        wait(collapseNodes, 700)
+            .then(d => wait(expandNodes, 500))
+    }
+
+    function collapseNodes(duration) {
+        textViews.map(t => t.hide());
+        textBackgrounds.map(tb => tb.hide())
+        circles.map(c => c.animate(duration).move(centerPos[0] - 15, centerPos[1] - 15))
+    }
+
+    function expandNodes(duration) {
+        circles.map(function (c) {
+            c.animate(duration).attr(posForCircle(centerPos, c.data.distance, c.data.unitPos))
+                .afterAll(function () {
+                    textViews.map((t, i) => {
+                        const pos = posForText(centerPos, t.data.distance, t.data.unitPos);
+                        t.attr(pos)
+                        textBackgrounds[i].attr(pos);
+                    })
+                    textViews.map(t => t.show());
+                })
+        })
+    }
 
     function updateNodeData() {
         circles.map((c, i) => c.data = data[i]);
         textViews.map((t, i) => t.data = data[i]);
     }
+
     function wait(fn, timeout = 1500) {
-        return new Promise(function(resolve, reject){
+        return new Promise(function (resolve, reject) {
             try {
                 fn(timeout);
                 window.setTimeout(function () {
                     resolve()
                 }, timeout + 100)
             }
-            catch(error){
+            catch (error) {
                 console.error("Set timeout didn't work, error ==>", error)
                 reject();
             }
@@ -136,9 +179,6 @@
         })
     }
 
-    function backToCenter(circles, center) {
-        circles.map(c => c.animate().move({cx: 400, cy: 400}))
-    }
     //UTILS
     function vecDiff(v1, v2) {
         return Math.sqrt(
@@ -165,7 +205,7 @@
         }
     }
 
-    function cleanData(data) {
+    function parseVectorStrings(data) {
         dat = JSON.parse(JSON.stringify(data)) //don't do this if data is more than 2 layers deep!
         dat.map(d => d.vector = d.vector.split(' '));
         dat.map(d => {
@@ -186,13 +226,10 @@
     }
 
 
-
-
-
     function posForText(center, distance, rnd) {
         return {
-            x: center[0] + rnd[0] * distance - 35,
-            y: center[1] + rnd[1] * distance - 40
+            x: center[0] + rnd[0] * distance,
+            y: center[1] + rnd[1] * distance
         }
     }
 
@@ -234,7 +271,6 @@
                 });
         })
     }
-
 
 
 </script>
