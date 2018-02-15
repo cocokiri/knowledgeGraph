@@ -1,4 +1,5 @@
 
+
 function vecDiff(v1, v2) {
     return Math.sqrt(
         vectorSubtract(v1, v2)
