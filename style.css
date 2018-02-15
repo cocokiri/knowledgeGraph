@@ -40,13 +40,13 @@ html {
 }
 
 #sideBar {
-    max-width: 25vw;
+    max-width: 20vw;
+    margin:0;
+    padding: 1rem;
     position: absolute;
-
     display: flex;
     flex-direction: column;
     background: linear-gradient(#f4f8ff, #fff9e9);
-    box-shadow: 0px 2px 1px rgba(50, 50, 50, 0.75);
     border-radius: 8px;
 
 

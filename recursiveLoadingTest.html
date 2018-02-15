@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Document</title>
+</head>
+<body>
+
+</body>
+</html>
+<script>
+
+    // getData('./data/data10.json')
+
+
+
+    let dat = [];
+
+
+    getDataSequentially().then(allData => console.log("Done"))
+
+    function getDataSequentially(dataAcc =[], ending=0, dirName = './data/', prefix="data", ) {
+        const path = dirName + prefix + ending.toString() + ".json";
+        return new Promise(function (resolve, reject) {
+            fetch(path)
+                .then(
+                    function (response) {
+                        if (response.status !== 200 && response.status !== 404) {
+                            console.log('Looks like there was a problem. Status Code: ' + response.status);
+                            return;
+                        }
+
+                        if (response.status === 404) { //no more files
+                            console.log("DONE with ALL", dataAcc)
+                            resolve(dataAcc)
+                            return
+                        }
+
+// Examine the text in the response
+                        response.json().then(function (data) {
+                            console.log(data, path);
+                            const next = ending+ 1;
+                            // const parsedData = cleanData(data);
+                            const mergedData = dataAcc.concat(data);
+
+                            dat = mergedData;
+                            getDataSequentially(mergedData, next)
+                        });
+                    }
+                )
+                .catch(function (err) {
+                    reject();
+                    console.log('Fetch Error :-S', err);
+                });
+        })
+    }
+
+
+
+
+    function getData(path) {
+        return new Promise(function (resolve, reject) {
+            fetch(path)
+                .then(
+                    function (response) {
+                        if (response.status !== 200) {
+                            console.log('Looks like there was a problem. Status Code: ' +
+                                response.status);
+                            return;
+                        }
+// Examine the text in the response
+                        response.json().then(function (data) {
+                            console.log(data, path);
+                            resolve(data)
+                        });
+                    }
+                )
+                .catch(function (err) {
+                    reject();
+                    console.log('Fetch Error :-S', err);
+                });
+        })
+    }
+</script>
+
