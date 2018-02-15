@@ -1,25 +1,172 @@
 const draw = new SVG('container').size(window.innerWidth, window.innerHeight);
 const SEARCH = document.getElementById('searchInput')
+
+let CENTER = screenCenter(window);
+CENTER.diff = function (otherPos) {
+    return {x: CENTER.x - otherPos.x, y: CENTER.y - otherPos.y}
+};
 SEARCH.addEventListener('keypress', function (e) {
     key = e.which || e.keyCode;
     if (key === 13) { // 13 is enter\n'
         //update();
         searchInput(SEARCH.value);
         SEARCH.value = "";
-
-
+        updatePreviousWordsDiv()
     }
 })
 
+function linkField(linkName, readers =[], link ="jajaja") {
+    const lField = document.createElement('div')
+    lField.setAttribute('class', "linkField")
+    const a = document.createElement('a')
+    a.setAttribute('href', link)
+
+    const lName = document.createElement('div')
+    lName.setAttribute('class', "link")
+    lName.textContent = linkName;
+
+    // const rBy = document.createElement('div');
+    // rBy.setAttribute('class', 'readBy')
+    //
+    // const readrs = readers.map(person => {
+    //     const r = document.createElement('div')
+    //     r.setAttribute('class', 'reader')
+    //     r.textContent = person;
+    //     return r;
+    // })
+    // Array.from(readrs).map(r => rBy.appendChild(r))
+    lName.appendChild(a)
+
+    lField.appendChild(lName)
+    // lField.appendChild(rBy)
+
+    return lField;
+}
+
+let relevantpapers;
+const sel = document.getElementById('myoptions')
+let paperConceptDiff;
+let concObj
+let concPapers
+// let selectedUser;
+
+function newPapers(word) {
+    // selectedUser = sel.options[sel.selectedIndex].text
+    concObj = raw.filter(d => d.word.toLowerCase() === word.toLowerCase())[0];
+    concPapers = papersPerConcept(concObj);
+    Array.from(document.getElementsByClassName('linkField')).forEach(e=> e.remove());
+
+    concPapers.forEach(e => {
+        document.getElementsByClassName('sourceLinks')[0].appendChild(linkField(e.slice(0, -4)))
+    })
+}
+
 function searchInput(word) {
-    previousTags = [];
-    focus = raw.filter(d => d.word.toLowerCase() === word.toLowerCase())[0];
-    console.log(focus, word, "asdas")
-    focus.distance = 0;
-    updateAll(focus)
+    if (word.split('&&').length===1) {
+        previousTags = [];
+
+        // currentConcepts = word.split('&&');
+        // const selectedUser = sel.options[sel.selectedIndex].text
+        // relevantpapers=getPapersForConceptDiff(currentConcepts, raw);
+        // paperConceptDiff = arrOverlap(relevantpapers);
+        //
+        // const paperFin = overlapUserAndPapers(paperConceptDiff, selectedUser)
+        // console.log(paperFin, 'Papers Final')
+
+       newPapers(word)
+
+        // linkField()
+        focus = concObj;
+        console.log(focus, word, "asdas")
+        focus.distance = 0;
+        updateAll(focus)
+    }
 }
 
 let previousWords = [];
+let allUserswithPapers;
+
+let currentPapers = [];
+let currentConcepts = [];
+
+function updatePreviousWordsDiv(prevWords = previousWords, and = false) {
+    let str = prevWords.reduce((acc, val) => acc + val + " --> ", "");
+    if (typeof prevWords === 'string') {
+        str = prevWords;
+    }
+    document.getElementById('previousWords').textContent = str;
+}
+
+function isProbablyName(searchText, names) {
+    return names.includes(searchText);
+}
+
+function setOptions(options) {
+    var select = document.getElementById('myoptions');
+    let i = 0;
+    for (let user in allUserswithPapers) {
+        select.options[i] = new Option(user, i);  //new Option("Text", "Value")
+        i++;
+    }
+}
+
+function getAllNames(data){
+    const paths = data.map(d=> d.from);
+    return Array.from(new Set(paths.map(f => f.map(parsePath_reader_paper(f).reader))))
+}
+
+
+// const AllpapersWithReaders = extractPapersWithReaders(dat)
+
+function extractPapersWithReaders(data) {
+    const papers = {};
+    for (let d of data) {
+        for (let path of d.from) {
+            const reader = path.split('/')[1]
+            const pap = path.split('/')[0]
+
+            if (!papers[pap]) {
+                papers[pap] = new Set();
+
+            }
+            papers[pap].add(reader)
+        }
+    }
+    return papers;
+}
+
+function overlapUserAndPapers(papers, user) {
+
+    return papers.filter(p => user.has(p)).length > 0;
+}
+
+function papersPerConcept(d) {
+    const papers = [];
+    d.from.map(f => papers.push(f.split('/')[1]));
+    return papers;
+}
+function readersPerConcept(d) {
+    const readers = [];
+    d.from.map(f => readers.push(f.split('/')[0]));
+    return readers;
+}
+
+
+
+function getPapersForConceptDiff(concepts, data) {
+    const objs = data.filter(d => concepts.includes(d.word))
+    const commonPapers = [];
+    objs.forEach(f => commonPapers.push(papersPerConcept(f)))
+    return commonPapers;
+}
+
+
+function parsePath_reader_paper(path) {
+    const str = path.split('/');
+    return {reader: str[0], paper: str[0]}
+}
+
+//shift click = && concept
 
 
 const gradYellowOrange = draw.gradient('linear', function (stop) {
@@ -55,18 +202,28 @@ function getDataSequentially(dataAcc = [], ending = 0, dirName = './data/', pref
 
                     if (response.status === 404) { //no more files
                         console.log("DONE with ALL", dataAcc)
+
+                        allUserswithPapers= extractPapersWithReaders(raw);
+                        setOptions(allUserswithPapers)
+                        const allNames = new Set();
                         resolve(dataAcc)
                         return
                     }
 
 // Examine the text in the response
-                    response.json().then(function (data) {
-                        console.log(data, path);
+                    response.json().then(function (partialData) {
+                        console.log(partialData, path);
                         const next = ending + 1;
-                        // const parsedData = cleanData(data);
-                        const mergedData = dataAcc.concat(data);
 
-                        dat = mergedData;
+                        // ----- IN GLOBAL SCOPE _)))W HAHAHAH deadlines...
+                        let parsedData = parseVectorStrings(partialData);
+                        const mergedData = dataAcc.concat(parsedData);
+
+                        raw = mergedData;
+
+                        //----
+
+                        resolve(dat) //for the first .then to load images
                         getDataSequentially(mergedData, next)
                     });
                 }
@@ -81,19 +238,14 @@ function getDataSequentially(dataAcc = [], ending = 0, dirName = './data/', pref
 let data;
 let dat;
 let raw;
-let centerPos = [window.innerWidth / 2, window.innerHeight / 2];
-let CENTER = screenCenter(window);
-CENTER.diff = function (otherPos) {
-    return {x: CENTER.x - otherPos.x, y: CENTER.y - otherPos.y}
-};
 
-window.addEventListener('resize', function () {
-    CENTER = screenCenter(window)
-})
+// window.addEventListener('resize', function () {
+//     CENTER = screenCenter(window)
+// })
 
 
-function screenCenter(w = window) {
-    return {x: w.innerWidth / 2, y: w.innerHeight / 2}
+function screenCenter() {
+    return {x: window.innerWidth / 2, y: window.innerHeight / 2}
 }
 
 let circles;
@@ -111,22 +263,28 @@ let previousTags = [];
 function spaceOut(d) {
     d.screenDist = 0;
     if (d.distance > 0) {
-        d.distance *= 2100;
+        d.distance *= 900;
         // d.distance += 40;
-        d.screenDist = (d.distance * 2100);
+        // d.screenDist = (d.distance * 2100);
     }
     return d;
+}
+
+function arrOverlap(arr1, arr2) {
+    return arr1.filter(function (n) {
+        return arr2.indexOf(n) !== -1;
+    });
 }
 
 //TODO: drop shadows
 //      history timelines
 //      venn diagramming / only show tag overlaps
 
-getData('./data3.json').then(rawData => {
-    raw = JSON.parse(JSON.stringify(rawData))
-    raw = parseVectorStrings(raw);
+getDataSequentially().then(firstData => {
+    // raw = JSON.parse(JSON.stringify(rawData))
+    raw = firstData;
 
-    raw = raw.slice(0, 1000);
+    // raw = raw.slice(0, 1000);
     //100 = vector lengthß
     focus = raw[5];
 
@@ -140,7 +298,7 @@ getData('./data3.json').then(rawData => {
         .addClass('circles'));
 
     textBackgrounds = data
-        .map(d => draw.rect(Math.sqrt(d.word.length) * 25, 20)
+        .map(d => draw.rect(Math.sqrt(d.word.length) * 30, 20)
             .attr(CENTER.diff(d.pos)));
     textBackgrounds.map(e => e.fill(gradBlueDark));
     textBackgrounds.map(e => e.addClass('textBG'))
@@ -165,6 +323,7 @@ getData('./data3.json').then(rawData => {
     //events
     circles.map(c => c.click(function () {
         previousTags.push(c);
+        newPapers(c.data.word)
         updateAll(c.data);
     }))
 
@@ -234,7 +393,7 @@ function collapseNodes(duration) {
     textViews.map(t => t.hide());
     textBackgrounds.map(tb => tb.hide())
     circles.map(c => {
-        c.animate(duration).move(CENTER.x, CENTER.y - 55).radius(12)
+        c.animate(duration).move(CENTER.x, CENTER.y).radius(12)
             .after(function () {
                 if (c.data.distance === 0) {
                     c.fill(gradGreen)

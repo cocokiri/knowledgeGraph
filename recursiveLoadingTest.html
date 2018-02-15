@@ -20,7 +20,7 @@
     let dat = [];
 
 
-    getDataSequentially().then(allData => console.log("Done"))
+    getDataSequentially().then(allData => console.log("Done", allData))
 
     function getDataSequentially(dataAcc =[], ending=0, dirName = './data/', prefix="data", ) {
         const path = dirName + prefix + ending.toString() + ".json";
@@ -47,6 +47,7 @@
                             const mergedData = dataAcc.concat(data);
 
                             dat = mergedData;
+                            resolve(dat)
                             getDataSequentially(mergedData, next)
                         });
                     }
